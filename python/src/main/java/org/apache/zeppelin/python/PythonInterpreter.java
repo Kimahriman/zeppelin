@@ -62,6 +62,7 @@ public class PythonInterpreter extends Interpreter {
   protected PythonProcessLauncher pythonProcessLauncher;
   private File pythonWorkDir;
   protected boolean useBuiltinPy4j = true;
+  private String extraPythonPath;
 
   // used to forward output from python process to InterpreterOutput
   private InterpreterOutputStream outputStream;
@@ -213,11 +214,22 @@ public class PythonInterpreter extends Interpreter {
     }
   }
 
+  protected void addExtraPythonPath(String path) {
+    if (extraPythonPath == null) {
+      extraPythonPath = path;
+    } else {
+      extraPythonPath = extraPythonPath + File.pathSeparator + path;
+    }
+  }
+
   protected Map<String, String> setupPythonEnv() throws IOException {
     Map<String, String> env = EnvironmentUtils.getProcEnvironment();
     appendToPythonPath(env, pythonWorkDir.getAbsolutePath());
     if (useBuiltinPy4j) {
       appendToPythonPath(env, pythonWorkDir.getAbsolutePath() + "/py4j-src-0.10.7.zip");
+    }
+    if (extraPythonPath != null) {
+      appendToPythonPath(env, extraPythonPath);
     }
     LOGGER.info("PYTHONPATH: {}", env.get("PYTHONPATH"));
     return env;
