@@ -21,9 +21,6 @@ import java.io.IOException;
 import java.lang.reflect.Constructor;
 
 import com.google.gson.Gson;
-import org.apache.log4j.ConsoleAppender;
-import org.apache.log4j.Level;
-import org.apache.log4j.PatternLayout;
 import org.apache.zeppelin.interpreter.*;
 import org.apache.zeppelin.interpreter.InterpreterResult.Code;
 import org.apache.zeppelin.interpreter.remote.RemoteInterpreterEventClient;
@@ -52,19 +49,7 @@ public class ZeppelinApplicationDevServer extends ZeppelinDevServer {
     super(port);
     this.className = className;
     this.resourceSet = resourceSet;
-    setLogger();
   };
-
-  void setLogger() {
-    ConsoleAppender console = new ConsoleAppender(); //create appender
-    //configure the appender
-    String PATTERN = "%d [%p|%c|%C{1}] %m%n";
-    console.setLayout(new PatternLayout(PATTERN));
-    console.setThreshold(Level.DEBUG);
-    console.activateOptions();
-    //add appender to any Logger (here is root)
-    org.apache.log4j.Logger.getRootLogger().addAppender(console);
-  }
 
 
   @Override
