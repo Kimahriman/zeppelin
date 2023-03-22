@@ -43,7 +43,6 @@ import java.io.StringReader;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
-import java.util.Enumeration;
 import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
@@ -55,11 +54,6 @@ import org.apache.commons.compress.compressors.gzip.GzipCompressorInputStream;
 import org.apache.commons.io.FileUtils;
 import org.apache.commons.io.IOUtils;
 import org.apache.commons.lang3.StringUtils;
-import org.apache.log4j.Appender;
-import org.apache.log4j.PatternLayout;
-import org.apache.log4j.WriterAppender;
-import org.apache.log4j.spi.Filter;
-import org.apache.log4j.spi.LoggingEvent;
 import org.apache.zeppelin.conf.ZeppelinConfiguration;
 import org.apache.zeppelin.conf.ZeppelinConfiguration.ConfVars;
 import org.slf4j.Logger;
@@ -692,30 +686,5 @@ public class HeliumBundleFactory {
     yarn.execute(args, env);
   }
 
-  private synchronized void configureLogger() {
-    org.apache.log4j.Logger npmLogger = org.apache.log4j.Logger.getLogger(
-        "com.github.eirslett.maven.plugins.frontend.lib.DefaultYarnRunner");
-    Enumeration appenders = org.apache.log4j.Logger.getRootLogger().getAllAppenders();
-
-    if (appenders != null) {
-      while (appenders.hasMoreElements()) {
-        Appender appender = (Appender) appenders.nextElement();
-        appender.addFilter(new Filter() {
-
-          @Override
-          public int decide(LoggingEvent loggingEvent) {
-            if (loggingEvent.getLoggerName().contains("DefaultYarnRunner")) {
-              return DENY;
-            } else {
-              return NEUTRAL;
-            }
-          }
-        });
-      }
-    }
-    npmLogger.addAppender(new WriterAppender(
-        new PatternLayout("%m%n"),
-        out
-    ));
-  }
+  private synchronized void configureLogger() {}
 }

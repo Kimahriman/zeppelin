@@ -35,9 +35,7 @@ import javax.ws.rs.core.MultivaluedMap;
 import javax.ws.rs.ext.MessageBodyReader;
 import javax.ws.rs.ext.MessageBodyWriter;
 import javax.ws.rs.ext.Provider;
-import org.apache.log4j.Logger;
 import org.apache.zeppelin.rest.message.LoggerRequest;
-import org.apache.zeppelin.rest.message.gson.LoggerSerializer;
 
 @Provider
 @Produces(MediaType.APPLICATION_JSON)
@@ -47,7 +45,6 @@ public class GsonProvider<T> implements MessageBodyReader<T>, MessageBodyWriter<
 
   public GsonProvider() {
     GsonBuilder gsonBuilder = new GsonBuilder().enableComplexMapKeySerialization();
-    gsonBuilder.registerTypeAdapter(Logger.class, new LoggerSerializer());
     this.gson = gsonBuilder.create();
   }
 

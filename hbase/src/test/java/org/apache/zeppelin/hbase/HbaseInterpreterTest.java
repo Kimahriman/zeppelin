@@ -18,7 +18,6 @@ import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.notNullValue;
 import static org.junit.Assert.assertEquals;
 
-import org.apache.log4j.BasicConfigurator;
 import org.junit.BeforeClass;
 import org.junit.Test;
 import org.slf4j.Logger;
@@ -38,7 +37,6 @@ public class HbaseInterpreterTest {
 
   @BeforeClass
   public static void setUp() throws NullPointerException, InterpreterException {
-    BasicConfigurator.configure();
     Properties properties = new Properties();
     properties.put("hbase.home", "");
     properties.put("hbase.ruby.sources", "");

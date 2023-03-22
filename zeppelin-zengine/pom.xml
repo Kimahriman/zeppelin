@@ -280,6 +280,19 @@
       </resource>
     </resources>
     <plugins>
+      <!-- Include logger classes for interpreters -->
+      <plugin>
+        <artifactId>maven-dependency-plugin</artifactId>
+        <executions>
+          <execution>
+            <id>copy-dependencies</id>
+            <configuration>
+              <outputDirectory>${project.build.directory}/test-classes</outputDirectory>
+              <includeGroupIds>org.slf4j,org.apache.logging.log4j</includeGroupIds>
+            </configuration>
+          </execution>
+        </executions>
+      </plugin>
       <plugin>
         <artifactId>maven-surefire-plugin</artifactId>
         <configuration>

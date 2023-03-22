@@ -185,7 +185,6 @@ public class ZeppelinServer extends ResourceConfig {
             bind(credentials).to(Credentials.class);
             bindAsContract(GsonProvider.class).in(Singleton.class);
             bindAsContract(WebApplicationExceptionMapper.class).in(Singleton.class);
-            bindAsContract(AdminService.class).in(Singleton.class);
             bindAsContract(AuthorizationService.class).in(Singleton.class);
             bindAsContract(ConnectionManager.class).in(Singleton.class);
             bindAsContract(NoteManager.class).in(Singleton.class);

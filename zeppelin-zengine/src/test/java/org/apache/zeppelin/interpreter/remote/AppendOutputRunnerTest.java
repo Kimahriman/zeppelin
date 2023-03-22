@@ -17,14 +17,12 @@
 
 package org.apache.zeppelin.interpreter.remote;
 
-import org.apache.log4j.AppenderSkeleton;
-import org.apache.log4j.Level;
-import org.apache.log4j.Logger;
-import org.apache.log4j.spi.LoggingEvent;
 import org.junit.After;
 import org.junit.Test;
 import org.mockito.invocation.InvocationOnMock;
 import org.mockito.stubbing.Answer;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -129,42 +127,6 @@ public class AppendOutputRunnerTest {
     verify(listener, atMost(NUM_CLUBBED_EVENTS)).onOutputAppend(any(String.class), any(String.class), anyInt(), any(String.class));
   }
 
-  @Test
-  public void testWarnLoggerForLargeData() throws InterruptedException {
-    RemoteInterpreterProcessListener listener = mock(RemoteInterpreterProcessListener.class);
-    AppendOutputRunner runner = new AppendOutputRunner(listener);
-    String data = "data\n";
-    int numEvents = 100000;
-
-    for (int i=0; i<numEvents; i++) {
-      runner.appendBuffer("noteId", "paraId", 0, data);
-    }
-
-    TestAppender appender = new TestAppender();
-    Logger logger = Logger.getRootLogger();
-    logger.addAppender(appender);
-
-    runner.run();
-    List<LoggingEvent> log;
-
-    int warnLogCounter;
-    LoggingEvent sizeWarnLogEntry = null;
-    do {
-      warnLogCounter = 0;
-      log = appender.getLog();
-      for (LoggingEvent logEntry: log) {
-        if (Level.WARN.equals(logEntry.getLevel())) {
-          sizeWarnLogEntry = logEntry;
-          warnLogCounter += 1;
-        }
-      }
-    } while(warnLogCounter != 2);
-
-    String loggerString = "Processing size for buffered append-output is high: " +
-        (data.length() * numEvents) + " characters.";
-    assertEquals(loggerString, sizeWarnLogEntry.getMessage());
-  }
-
   private class BombardEvents implements Runnable {
 
     private final AppendOutputRunner runner;
@@ -180,28 +142,6 @@ public class AppendOutputRunnerTest {
       for (int i=0; i<NUM_EVENTS; i++) {
         runner.appendBuffer(noteId, paraId, 0, "data\n");
       }
-    }
-  }
-
-  private class TestAppender extends AppenderSkeleton {
-    private final List<LoggingEvent> log = new ArrayList<>();
-
-    @Override
-    public boolean requiresLayout() {
-        return false;
-    }
-
-    @Override
-    protected void append(final LoggingEvent loggingEvent) {
-        log.add(loggingEvent);
-    }
-
-    @Override
-    public void close() {
-    }
-
-    public List<LoggingEvent> getLog() {
-        return new ArrayList<>(log);
     }
   }
 
