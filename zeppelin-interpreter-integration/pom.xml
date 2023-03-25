@@ -79,6 +79,12 @@
       <groupId>org.apache.zeppelin</groupId>
       <artifactId>zeppelin-server</artifactId>
       <version>${project.version}</version>
+      <exclusions>
+        <exclusion>
+          <groupId>org.apache.logging.log4j</groupId>
+          <artifactId>*</artifactId>
+        </exclusion>
+      </exclusions>
     </dependency>
 
     <dependency>
