@@ -17,24 +17,34 @@
 
 package org.apache.zeppelin.spark;
 
-
 import org.apache.hadoop.util.VersionInfo;
 import org.apache.hadoop.util.VersionUtil;
+import org.apache.spark.SparkContext;
+import org.apache.spark.scheduler.SparkListener;
+import org.apache.spark.scheduler.SparkListenerJobStart;
+import org.apache.spark.sql.Dataset;
+import org.apache.spark.sql.Row;
+import org.apache.spark.sql.SparkSession;
+import org.apache.spark.sql.catalyst.expressions.GenericRow;
+import org.apache.spark.sql.types.StructType;
 import org.apache.zeppelin.interpreter.InterpreterContext;
+import org.apache.zeppelin.interpreter.InterpreterException;
+import org.apache.zeppelin.user.AuthenticationInfo;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.lang.reflect.Constructor;
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 
 /**
- * This is abstract class for anything that is api incompatible between spark1 and spark2. It will
- * load the correct version of SparkShims based on the version of Spark.
+ * Utility and helper functions for the Spark Interpreter
  */
-public abstract class SparkShims {
-
+class SparkInterpreterUtils {
+  private static final Logger LOGGER = LoggerFactory.getLogger(SparkInterpreterUtils.class);
+  
   // the following lines for checking specific versions
   private static final String HADOOP_VERSION_2_6_6 = "2.6.6";
   private static final String HADOOP_VERSION_2_7_0 = "2.7.0";
@@ -45,60 +55,73 @@ public abstract class SparkShims {
   private static final String HADOOP_VERSION_3_0_0 = "3.0.0";
   private static final String HADOOP_VERSION_3_0_0_ALPHA4 = "3.0.0-alpha4";
 
-  private static final Logger LOGGER = LoggerFactory.getLogger(SparkShims.class);
-
-  private static SparkShims sparkShims;
-
-  protected Properties properties;
-
-  public SparkShims(Properties properties) {
-    this.properties = properties;
+  public static String buildJobGroupId(InterpreterContext context) {
+    String uName = "anonymous";
+    if (context.getAuthenticationInfo() != null) {
+      uName = getUserName(context.getAuthenticationInfo());
+    }
+    return "zeppelin|" + uName + "|" + context.getNoteId() + "|" + context.getParagraphId();
   }
 
-  private static SparkShims loadShims(int sparkMajorVersion, Properties properties, Object entryPoint)
-      throws Exception {
-    Class<?> sparkShimsClass;
-    if (sparkMajorVersion == 3 || sparkMajorVersion == 4) {
-      LOGGER.info("Initializing shims for Spark 3.x");
-      sparkShimsClass = Class.forName("org.apache.zeppelin.spark.Spark3Shims");
-    } else {
-      throw new Exception("Spark major version: '" + sparkMajorVersion + "' is not supported yet");
+  public static String buildJobDesc(InterpreterContext context) {
+    return "Started by: " + getUserName(context.getAuthenticationInfo());
+  }
+
+  public static String getUserName(AuthenticationInfo info) {
+    String uName = "";
+    if (info != null) {
+      uName = info.getUser();
+    }
+    if (uName == null || uName.isEmpty()) {
+      uName = "anonymous";
+    }
+    return uName;
+  }
+
+  public static List<Object> sparkRowToList(Row row) {
+    List<Object> list = new ArrayList<>();
+    for (int i = 0; i< row.size(); i++) {
+      list.add(row.get(i));
+    }
+    return list;
+  }
+
+  public static Dataset<Row> getAsDataFrame(String value, SparkSession sparkSession) {
+    String[] lines = value.split("\\n");
+    String head = lines[0];
+    String[] columns = head.split("\t");
+    StructType schema = new StructType();
+    for (String column : columns) {
+      schema = schema.add(column, "String");
     }
 
-    Constructor c = sparkShimsClass.getConstructor(Properties.class, Object.class);
-    return (SparkShims) c.newInstance(properties, entryPoint);
-  }
-
-  /**
-   *
-   * @param sparkVersion
-   * @param properties
-   * @param entryPoint  entryPoint is SparkContext for Spark 1.x SparkSession for Spark 2.x
-   * @return
-   */
-  public static SparkShims getInstance(String sparkVersion,
-                                       Properties properties,
-                                       Object entryPoint) throws Exception {
-    if (sparkShims == null) {
-      int sparkMajorVersion = SparkVersion.fromVersionString(sparkVersion).getMajorVersion();
-      sparkShims = loadShims(sparkMajorVersion, properties, entryPoint);
+    List<Row> rows = new ArrayList<>();
+    for (int i = 1; i < lines.length; ++i) {
+      String[] tokens = lines[i].split("\t");
+      Row row = new GenericRow(tokens);
+      rows.add(row);
     }
-    return sparkShims;
+    return sparkSession.createDataFrame(rows, schema);
   }
 
-  /**
-   * This is due to SparkListener api change between spark1 and spark2. SparkListener is trait in
-   * spark1 while it is abstract class in spark2.
-   */
-  public abstract void setupSparkListener(String master,
-                                          String sparkWebUrl,
-                                          InterpreterContext context);
+  public static void setupSparkListener(final String master,
+                                 final String sparkWebUrl,
+                                 final InterpreterContext context,
+                                 final Properties properties) {
+    SparkContext sc = SparkContext.getOrCreate();
+    sc.addSparkListener(new SparkListener() {
+      @Override
+      public void onJobStart(SparkListenerJobStart jobStart) {
 
-  public abstract String showDataFrame(Object obj, int maxResult, InterpreterContext context);
+        if (sc.getConf().getBoolean("spark.ui.enabled", true) &&
+            !Boolean.parseBoolean(properties.getProperty("zeppelin.spark.ui.hidden", "false"))) {
+          buildSparkJobUrl(master, sparkWebUrl, jobStart.jobId(), jobStart.properties(), context);
+        }
+      }
+    });
+  }
 
-  public abstract Object getAsDataFrame(String value);
-
-  protected void buildSparkJobUrl(String master,
+  protected static void buildSparkJobUrl(String master,
                                   String sparkWebUrl,
                                   int jobId,
                                   Properties jobProperties,
@@ -147,7 +170,7 @@ public abstract class SparkShims {
    *
    * @return true if YARN-6615 is patched, false otherwise
    */
-  protected boolean supportYarn6615(String version) {
+  protected static boolean supportYarn6615(String version) {
     return (VersionUtil.compareVersions(HADOOP_VERSION_2_6_6, version) <= 0
             && VersionUtil.compareVersions(HADOOP_VERSION_2_7_0, version) > 0)
         || (VersionUtil.compareVersions(HADOOP_VERSION_2_7_4, version) <= 0
@@ -158,9 +181,5 @@ public abstract class SparkShims {
             && VersionUtil.compareVersions(HADOOP_VERSION_3_0_0, version) > 0)
         || (VersionUtil.compareVersions(HADOOP_VERSION_3_0_0_ALPHA4, version) <= 0)
         || (VersionUtil.compareVersions(HADOOP_VERSION_3_0_0, version) <= 0);
-  }
-
-  public static void reset() {
-    sparkShims = null;
   }
 }

@@ -19,7 +19,11 @@ package org.apache.zeppelin.spark
 
 import java.util
 
-import org.apache.spark.SparkContext
+import org.apache.commons.lang3.StringUtils
+import org.apache.hadoop.util.VersionInfo
+import org.apache.spark.sql.SparkSession
+import org.apache.spark.sql.catalyst.expressions.GenericRow
+import org.apache.spark.sql.types.StructType
 import org.apache.zeppelin.annotation.ZeppelinApi
 import org.apache.zeppelin.display.AngularObjectWatcher
 import org.apache.zeppelin.display.ui.OptionInput.ParamOption
@@ -27,13 +31,23 @@ import org.apache.zeppelin.interpreter.{ZeppelinContext, InterpreterContext, Int
 
 import scala.collection.Seq
 import scala.collection.JavaConverters._
+import org.apache.spark.sql.Row
+import org.apache.zeppelin.tabledata.TableDataUtils
+import org.apache.spark.sql.Dataset
+import org.apache.zeppelin.interpreter.SingleRowInterpreterResult
+import org.apache.zeppelin.interpreter.ResultMessages
+import collection.mutable.ArrayBuffer
+import org.apache.spark.scheduler.SparkListenerJobStart
+import org.apache.spark.scheduler.SparkListener
+import scala.collection.mutable.HashMap
+import org.apache.hadoop.util.VersionUtil
+import org.slf4j.LoggerFactory
 
 
 /**
   * ZeppelinContext for Spark
   */
-class SparkZeppelinContext(val sc: SparkContext,
-                           val sparkShims: SparkShims,
+class SparkZeppelinContext(val sparkSession: SparkSession,
                            val hooks2: InterpreterHookRegistry,
                            val maxResult2: Int) extends ZeppelinContext(hooks2, maxResult2) {
 
@@ -65,7 +79,54 @@ class SparkZeppelinContext(val sc: SparkContext,
 
   override def getInterpreterClassMap: util.Map[String, String] = interpreterClassMap.asJava
 
-  override def showData(obj: Any, maxResult: Int): String = sparkShims.showDataFrame(obj, maxResult, interpreterContext)
+  override def showData(obj: Any, maxResult: Int): String = {
+    if (obj.isInstanceOf[Dataset[_]]) {
+      val df = obj.asInstanceOf[Dataset[Any]].toDF()
+      // DDL will empty DataFrame
+      if (df.columns.isEmpty) {
+        return ""
+      }
+
+      // fetch maxResult+1 rows so that we can check whether it is larger than zeppelin.spark.maxResult
+      var rows = df.takeAsList(maxResult + 1).asScala
+      val template = interpreterContext.getLocalProperties().get("template")
+      if (!StringUtils.isBlank(template)) {
+        if (rows.size >= 1) {
+          return new SingleRowInterpreterResult(SparkInterpreterUtils.sparkRowToList(rows(0)), template, interpreterContext).toHtml()
+        } else {
+          return ""
+        }
+      }
+
+      val msg = new StringBuilder()
+      msg.append("%table ")
+      msg.append(StringUtils.join(TableDataUtils.normalizeColumns(df.columns.map(_.asInstanceOf[Object]).toList.asJava), "\t"))
+      msg.append("\n")
+      val isLargerThanMaxResult = rows.size > maxResult
+      if (isLargerThanMaxResult) {
+        rows = rows.slice(0, maxResult)
+      }
+      rows.foreach { row =>
+        for (i <- (0 until row.size)) {
+          msg.append(TableDataUtils.normalizeColumn(row.get(i)))
+          if (i != row.size - 1) {
+            msg.append("\t")
+          }
+        }
+        msg.append("\n")
+      }
+
+      if (isLargerThanMaxResult) {
+        msg.append("\n");
+        msg.append(ResultMessages.getExceedsLimitRowsMessage(maxResult, "zeppelin.spark.maxResult"))
+      }
+      // append %text at the end, otherwise the following output will be put in table as well.
+      msg.append("\n%text ")
+      return msg.toString()
+    } else {
+      return obj.toString()
+    }
+  }
 
   /**
    * create paragraph level of dynamic form of Select with no item selected.
@@ -237,6 +298,6 @@ class SparkZeppelinContext(val sc: SparkContext,
   }
 
   def getAsDataFrame(name: String): Object = {
-    sparkShims.getAsDataFrame(get(name).toString)
+    SparkInterpreterUtils.getAsDataFrame(get(name).toString, sparkSession)
   }
 }

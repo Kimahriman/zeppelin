@@ -37,7 +37,7 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 import org.mockito.ArgumentCaptor;
 
-class SparkShimsTest {
+class SparkInterpreterUtilsTest {
 
   @ParameterizedTest
   @CsvSource({"2.6.0, false",
@@ -64,29 +64,11 @@ class SparkShimsTest {
   "3.0.0-alpha4, true", // The latest fixed version
   "3.0.1, true"}) // Future versions
   void checkYarnVersionTest(String version, boolean expected) {
-      SparkShims sparkShims =
-          new SparkShims(new Properties()) {
-            @Override
-            public void setupSparkListener(String master,
-                                           String sparkWebUrl,
-                                           InterpreterContext context) {}
-
-            @Override
-            public String showDataFrame(Object obj, int maxResult, InterpreterContext context) {
-              return null;
-            }
-
-            @Override
-            public Object getAsDataFrame(String value) {
-              return null;
-            }
-          };
-      assertEquals(expected, sparkShims.supportYarn6615(version));
+      assertEquals(expected, SparkInterpreterUtils.supportYarn6615(version));
   }
 
   @Nested
   class SingleTests {
-    SparkShims sparkShims;
     InterpreterContext mockContext;
     RemoteInterpreterEventClient mockIntpEventClient;
 
@@ -95,19 +77,13 @@ class SparkShimsTest {
       mockContext = mock(InterpreterContext.class);
       mockIntpEventClient = mock(RemoteInterpreterEventClient.class);
       when(mockContext.getIntpEventClient()).thenReturn(mockIntpEventClient);
-
-      try {
-        sparkShims = SparkShims.getInstance(SparkVersion.SPARK_3_2_0.toString(), new Properties(), null);
-      } catch (Throwable e1) {
-        throw new RuntimeException("All SparkShims are tried, but no one can be created.");
-      }
     }
 
     @Test
     void runUnderLocalTest() {
       Properties properties = new Properties();
       properties.setProperty("spark.jobGroup.id", "zeppelin|user1|noteId|paragraphId");
-      sparkShims.buildSparkJobUrl("local", "http://sparkurl", 0, properties, mockContext);
+      SparkInterpreterUtils.buildSparkJobUrl("local", "http://sparkurl", 0, properties, mockContext);
       @SuppressWarnings("unchecked")
       ArgumentCaptor<Map<String, String>> argument = ArgumentCaptor.forClass(HashMap.class);
       verify(mockIntpEventClient).onParaInfosReceived(argument.capture());
@@ -120,14 +96,14 @@ class SparkShimsTest {
     void runUnderYarnTest() {
       Properties properties = new Properties();
       properties.setProperty("spark.jobGroup.id", "zeppelin|user1|noteId|paragraphId");
-      sparkShims.buildSparkJobUrl("yarn", "http://sparkurl", 0, properties, mockContext);
+      SparkInterpreterUtils.buildSparkJobUrl("yarn", "http://sparkurl", 0, properties, mockContext);
       @SuppressWarnings("unchecked")
       ArgumentCaptor<Map<String, String>> argument = ArgumentCaptor.forClass(HashMap.class);
       verify(mockIntpEventClient).onParaInfosReceived(argument.capture());
       Map<String, String> mapValue = argument.getValue();
       assertTrue(mapValue.keySet().contains("jobUrl"));
 
-      if (sparkShims.supportYarn6615(VersionInfo.getVersion())) {
+      if (SparkInterpreterUtils.supportYarn6615(VersionInfo.getVersion())) {
         assertTrue(mapValue.get("jobUrl").contains("/jobs/job?id="));
       } else {
         assertFalse(mapValue.get("jobUrl").contains("/jobs/job?id="));
